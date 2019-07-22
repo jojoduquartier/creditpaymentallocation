@@ -29,6 +29,9 @@ api_objective = """
 Find out if you could save on your total credit/loan balance by changing how much you put on each card. \
 We wish to suggest how much you should put towards each of your credit cards so that your next month total balance \
 is the lowest possible.
+
+We will use the percentage of your minimum payment per your balance to adjust minimum balance
+Or we use a 3% rate is used 
 """
 
 months = [
@@ -47,18 +50,57 @@ months = [
 ]
 
 
-class Card(BaseModel):
+class Card(BaseModel, object):
     cardNickName: str
     cardBalance: float
     cardApr: float
     minPayment: float
     maxPayment: float = None
     actualPayments: float = None
+    min2balancerate: float = 0.0
+    minProjections: typing.List[float] = [0.0] * 13
+    actualProjections: typing.List[float] = [0.0] * 13
+
+    def update_min(self):
+        if self.minPayment > self.cardBalance:
+            self.minPayment = self.cardBalance
 
 
 class Model(BaseModel):
     budget: float
     cards: typing.List[Card]
+
+    def update_payments(self):
+        if all(card.actualProjections[-1] >= card.actualPayments for card in self.cards):
+            return None
+
+        overflow_money = sum(
+            card.actualPayments - card.actualProjections[-1]
+            for card in self.cards if card.actualProjections[-1] < card.actualPayments
+        )
+
+        card_orders = sorted(self.cards, key=lambda c: c.cardApr, reverse=True)
+        for card in card_orders:
+            # set this to the balance since it would be what is being paid
+            if card.actualProjections[-1] < card.actualPayments:
+                card.actualPayments = card.actualProjections[-1]
+                # print(card.cardNickName, card.actualPayments)
+                continue
+
+            # if no money is left do nothing
+            if overflow_money <= 0:
+                continue
+
+            if card.actualProjections[-1] < (card.actualPayments + overflow_money):
+                to_add = card.actualProjections[-1] - card.actualPayments
+            else:
+                to_add = overflow_money
+
+            overflow_money -= to_add
+            card.actualPayments = card.actualPayments + to_add
+            # print(card.cardNickName, to_add, overflow_money, card.actualPayments)
+
+        return None
 
 
 class UpdatedCard(Card):
@@ -158,55 +200,61 @@ async def suggest_payments(model: Model):
 
 @app.post("/cards/12", response_model=CompareResponseModel)
 async def compare_12_months(model: Model):
-    budget = model.budget
-    balances = tuple(card.cardBalance for card in model.cards)
-    aprs = tuple(card.cardApr for card in model.cards)
-    minimum_payments = tuple(card.minPayment for card in model.cards)
-    maximum_payments = tuple(card.maxPayment for card in model.cards)
-    actual_payments = tuple(card.actualPayments for card in model.cards)
-
     # cycle months
     current_month = months[datetime.date.today().month - 1]
     cycles = itertools.cycle(months)  # cycle the months
     cycles = itertools.dropwhile(lambda x: x != current_month, cycles)  # shift cycles til we reach current month
     cycles = tuple(next(cycles) for _ in range(13))  # next 12 months plus current
 
-    # projections on minimum payment
-    min_projection = list(
-        map(
-            lambda balance, payment, rate: [
-                                               balance
-                                           ] + [
-                                               balance_on_constant_pay(balance, payment, rate, i) for i in
-                                               range(1, 13)
-                                           ],
-            balances,
-            minimum_payments,
-            aprs
-        )
-    )
+    # ensure card minimums are alright
+    for card in model.cards:
+        # make min balance if somehow min is sent as higher than balance
+        card.update_min()
 
-    # projections on current payment
-    actual_projection = list(
-        map(
-            lambda balance, payment, rate: [
-                                               balance
-                                           ] + [
-                                               balance_on_constant_pay(balance, payment, rate, i) for i in
-                                               range(1, 13)
-                                           ],
-            balances,
-            actual_payments,
-            aprs
-        )
-    )
+        # we get the rate to use to update interest
+        card.min2balancerate = round(card.minPayment / card.cardBalance, 2)
+
+        # create something to store the projections
+        card.minProjections = [card.cardBalance]
+        card.actualProjections = [card.cardBalance]
+
+    # budget and balance data
+    budget = model.budget
+    balances = tuple(card.cardBalance for card in model.cards)
+    aprs = tuple(card.cardApr for card in model.cards)
+    minimum_payments = tuple(card.minPayment for card in model.cards)
+    maximum_payments = tuple(card.maxPayment for card in model.cards)
+
+    # min projections - easy so keep it apart
+    for _ in range(1, 13):
+        for card in model.cards:
+            card.minPayment = card.minProjections[-1] * card.min2balancerate
+            card.update_min()
+
+            # calculation
+            new_balance = balance_on_constant_pay(card.minProjections[-1], card.minPayment, card.cardApr, 1)
+            new_balance = round(new_balance, 2)
+            card.minProjections.append(new_balance)
+
+    # actual projections
+    for _ in range(1, 13):
+        # after all cards processed update payments on the model
+        model.update_payments()
+
+        for card in model.cards:
+            new_balance = balance_on_constant_pay(card.actualProjections[-1], card.actualPayments, card.cardApr, 1)
+            new_balance = round(new_balance, 2)
+            card.actualProjections.append(new_balance)
+
+    min_projection = [card.minProjections for card in model.cards]
+    actual_projection = [card.actualProjections for card in model.cards]
 
     # projections on optimal payment month in month out
-    optimal_monthly, new_balence = [balances], balances
+    optimal_monthly, new_balance = [balances], balances
     for _ in range(13):
-        new_balence = allocate(new_balence, aprs, minimum_payments, maximum_payments, budget=budget, solution_only=True)
-        new_balence = tuple(round(el, 4) for el in new_balence)
-        optimal_monthly.append(new_balence)
+        new_balance = allocate(new_balance, aprs, minimum_payments, maximum_payments, budget=budget, solution_only=True)
+        new_balance = tuple(round(el, 4) for el in new_balance)
+        optimal_monthly.append(new_balance)
 
     optimal_monthly = zip(*optimal_monthly)
 
@@ -217,6 +265,11 @@ async def compare_12_months(model: Model):
             for a, b, c in projection
         ] for projection in projections
     )
+
+    """
+    When one card has a balance low enough that payment can be reallocated to another card we go directly to the
+    card with the highest APR
+    """
 
     response = []
     for card, projection in zip(model.cards, projections):
