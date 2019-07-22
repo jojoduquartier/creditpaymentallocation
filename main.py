@@ -103,7 +103,13 @@ class Model(BaseModel):
         return None
 
 
-class UpdatedCard(Card):
+class UpdatedCard(BaseModel):
+    cardNickName: str
+    cardBalance: float
+    cardApr: float
+    minPayment: float
+    maxPayment: float = None
+    actualPayments: float = None
     suggestedPayment: float
     nextBalanceOnSuggested: float
     nextBalanceOnMin: float
