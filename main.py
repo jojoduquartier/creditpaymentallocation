@@ -6,7 +6,7 @@ import datetime
 import functools
 import itertools
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from starlette.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -62,13 +62,86 @@ class Card(BaseModel, object):
     actualProjections: typing.List[float] = [0.0] * 13
 
     def update_min(self):
+        """
+        With the validators this is obsolete!
+        :return:
+        """
         if self.minPayment > self.cardBalance:
             self.minPayment = self.cardBalance
+
+    # balance must always be positive
+    @validator('cardBalance')
+    def positive_balance(cls, v):
+        if v <= 0:
+            raise ValueError('Balance Must Be Positive')
+        return v
+
+    # apr must always be positive
+    @validator('cardApr')
+    def positive_apr(cls, v):
+        if v <= 0:
+            raise ValueError('APR Must Be Positive')
+        return v
+
+    # minimum payment must be positive
+    @validator('minPayment')
+    def positive_min(cls, v):
+        if v <= 0:
+            raise ValueError('Minimum Payment Must Be Positive')
+        return v
+
+    # maximum payment must be positive
+    @validator('maxPayment')
+    def positive_max(cls, v):
+        if v <= 0:
+            raise ValueError('Maximum Payment Must Be Positive')
+        return v
+
+    # actual payments must be positive
+    @validator('actualPayments')
+    def positive_actual(cls, v):
+        if v <= 0:
+            raise ValueError('Actual Payments Must Be Positive')
+        return v
+
+    # minimum payments cannot be more than balance
+    @validator('minPayment')
+    def min_lt_balance(cls, v, values):
+        if 'cardBalance' in values and v >= values['cardBalance']:
+            raise ValueError('Minimum Payment Cannot Be Higher Than Balance')
+        return v
+
+    # maximum payments cannot be more than balance
+    @validator('maxPayment')
+    def max_lt_balance(cls, v, values):
+        if 'cardBalance' in values and v >= values['cardBalance']:
+            raise ValueError('Maximum Payment Cannot Be Higher Than Balance')
+        return v
+
+    # actual payments cannot be more than balance
+    @validator('actualPayments')
+    def act_lt_balance(cls, v, values):
+        if 'cardBalance' in values and v >= values['cardBalance']:
+            raise ValueError('Actual Payment Cannot Be Higher Than Balance')
+        return v
+
+    # max payment must not be less than minimum payment
+    @validator('maxPayment')
+    def max_bg_min(cls, v, values):
+        if 'minPayment' in values and v < values['minPayment']:
+            raise ValueError('Maximum Payment Cannot Be Less Than Minimum Payment')
+        return v
 
 
 class Model(BaseModel):
     budget: float
     cards: typing.List[Card]
+
+    @validator('budget')
+    def positive_budget(cls, v):
+        if v <= 0:
+            raise ValueError('Budget Must Be Positive')
+        return v
 
     def update_payments(self):
         if all(card.actualProjections[-1] >= card.actualPayments for card in self.cards):
