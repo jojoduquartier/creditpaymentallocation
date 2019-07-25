@@ -2,3 +2,4 @@ pulp
 fastapi
 pydantic
 starlette
+uvicorn
