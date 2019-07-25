@@ -3,3 +3,4 @@ fastapi
 pydantic
 starlette
 uvicorn
+gunicorn
