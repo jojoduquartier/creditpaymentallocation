@@ -55,8 +55,8 @@ class Card(BaseModel, object):
     cardBalance: float
     cardApr: float
     minPayment: float
-    maxPayment: float = None
-    actualPayments: float = None
+    maxPayment: float
+    actualPayments: float
     min2balancerate: float = 0.0
     minProjections: typing.List[float] = [0.0] * 13
     actualProjections: typing.List[float] = [0.0] * 13
@@ -72,56 +72,56 @@ class Card(BaseModel, object):
     # balance must always be positive
     @validator('cardBalance')
     def positive_balance(cls, v):
-        if v <= 0:
-            raise ValueError('Balance Must Be Positive')
+        if v < 0:
+            raise ValueError('Balance Must Be >= 0')
         return v
 
     # apr must always be positive
     @validator('cardApr')
     def positive_apr(cls, v):
-        if v <= 0:
-            raise ValueError('APR Must Be Positive')
+        if v < 0:
+            raise ValueError('APR Must Be >= 0')
         return v
 
     # minimum payment must be positive
     @validator('minPayment')
     def positive_min(cls, v):
-        if v <= 0:
-            raise ValueError('Minimum Payment Must Be Positive')
+        if v < 0:
+            raise ValueError('Minimum Payment Must Be >= 0')
         return v
 
     # maximum payment must be positive
     @validator('maxPayment')
     def positive_max(cls, v):
-        if v <= 0:
-            raise ValueError('Maximum Payment Must Be Positive')
+        if v < 0:
+            raise ValueError('Maximum Payment Must Be >= 0')
         return v
 
     # actual payments must be positive
     @validator('actualPayments')
     def positive_actual(cls, v):
-        if v <= 0:
-            raise ValueError('Actual Payments Must Be Positive')
+        if v < 0:
+            raise ValueError('Actual Payments Must Be >= 0')
         return v
 
     # minimum payments cannot be more than balance
     @validator('minPayment')
     def min_lt_balance(cls, v, values):
-        if 'cardBalance' in values and v >= values['cardBalance']:
+        if 'cardBalance' in values and v > values['cardBalance']:
             raise ValueError('Minimum Payment Cannot Be Higher Than Balance')
         return v
 
     # maximum payments cannot be more than balance
     @validator('maxPayment')
     def max_lt_balance(cls, v, values):
-        if 'cardBalance' in values and v >= values['cardBalance']:
+        if 'cardBalance' in values and v > values['cardBalance']:
             raise ValueError('Maximum Payment Cannot Be Higher Than Balance')
         return v
 
     # actual payments cannot be more than balance
     @validator('actualPayments')
     def act_lt_balance(cls, v, values):
-        if 'cardBalance' in values and v >= values['cardBalance']:
+        if 'cardBalance' in values and v > values['cardBalance']:
             raise ValueError('Actual Payment Cannot Be Higher Than Balance')
         return v
 
@@ -171,7 +171,6 @@ class Model(BaseModel):
 
             overflow_money -= to_add
             card.actualPayments = card.actualPayments + to_add
-            # print(card.cardNickName, to_add, overflow_money, card.actualPayments)
 
         return None
 
@@ -181,8 +180,8 @@ class UpdatedCard(BaseModel):
     cardBalance: float
     cardApr: float
     minPayment: float
-    maxPayment: float = None
-    actualPayments: float = None
+    maxPayment: float
+    actualPayments: float
     suggestedPayment: float
     nextBalanceOnSuggested: float
     nextBalanceOnMin: float
@@ -303,6 +302,9 @@ async def compare_12_months(model: Model):
     aprs = tuple(card.cardApr for card in model.cards)
     minimum_payments = tuple(card.minPayment for card in model.cards)
     maximum_payments = tuple(card.maxPayment for card in model.cards)
+
+    print(minimum_payments)
+    print(maximum_payments)
 
     # min projections - easy so keep it apart
     for _ in range(1, 13):
