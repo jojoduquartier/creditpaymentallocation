@@ -8,7 +8,7 @@ import itertools
 from fastapi import FastAPI
 from pydantic import BaseModel, validator
 
-# from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
@@ -19,13 +19,13 @@ origins = [
 ]
 
 # for testing locally
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=origins,
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 api_objective = """
 Find out if you could save on your total credit/loan balance by changing how much you put on each card. \
