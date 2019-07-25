@@ -305,3 +305,5 @@ FYI - this is written July 2019 and so we have the projection through July 2020
 
 Note that by July 2019 the total remaining balance if the linear programming approach is taken is only $4 less
 than when the the current payment allocation works.
+
+[API Docs](https://ccrdapi.herokuapp.com/docs)
