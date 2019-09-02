@@ -212,6 +212,7 @@ class CompareOptionsCard(BaseModel):
 class CompareResponseModel(BaseModel):
     progress: typing.List[CompareOptionsCard]
 
+# TODO: Fixed Minimum Payment
 
 @app.get("/")
 async def read_root():
