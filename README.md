@@ -1,4 +1,4 @@
-# Optimizing Payment Plan
+# Optimizing Payment Plan - Using linear Programming in Python coupled with FastAPI to suggest credit card payment
 
 Given two (or more) credit cards, assume after all transactions have posted and balances are final, if I had 
 budget of `$X`, how much should I put towards credit card 1 and how much should I put towards credit card 2?
